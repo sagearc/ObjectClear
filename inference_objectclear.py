@@ -82,20 +82,22 @@ if __name__ == '__main__':
         print(f'[{i+1}/{test_img_num}] Processing: {img_name}')
         
         image = Image.open(img_path).convert("RGB")
-        mask = Image.open(mask_path).convert("L")
+        mask1 = Image.open(mask_path.split(":")[0]).convert("L")
+        mask2 = Image.open(mask_path.split(":")[1]).convert("L")
         image_or = image.copy()
         
         # Our model was trained on 512×512 resolution.
         # Resizing the input so that the **shorter side is 512** helps achieve the best performance.
         image = resize_by_short_side(image, 512, resample=Image.BICUBIC)
-        mask = resize_by_short_side(mask, 512, resample=Image.NEAREST)
+        mask1 = resize_by_short_side(mask1, 512, resample=Image.NEAREST)
+        mask2 = resize_by_short_side(mask2, 512, resample=Image.NEAREST)
         
         w, h = image.size
     
-        result = pipe(
+        result = pipe.batch_inference(
             prompt="remove the instance of object",
             image=image,
-            mask_image=mask,
+            mask_images=[mask1, mask2],
             generator=generator,
             num_inference_steps=args.steps,
             guidance_scale=args.guidance_scale,
