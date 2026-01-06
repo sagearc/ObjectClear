@@ -103,14 +103,17 @@ if __name__ == '__main__':
             guidance_scale=args.guidance_scale,
             height=h,
             width=w,
-            return_attn_map=False,
+            return_attn_map=True,
         )
         
-        fused_img_pil = result.images[0]
+        for i, (fused_img_pil, mask_img) in enumerate(zip(result.images, result.attns)):
+            # save results
+            save_path = os.path.join(result_root, f'{basename}_removed_obj{i+1}.png')
+            fused_img_pil = fused_img_pil.resize(image_or.size)
+            fused_img_pil.save(save_path)
 
-        # save results
-        save_path = os.path.join(result_root, f'{basename}.png')
-        fused_img_pil = fused_img_pil.resize(image_or.size)
-        fused_img_pil.save(save_path)
+            mask_img = mask_img.resize(image_or.size)
+            mask_save_path = os.path.join(result_root, f'{basename}_attn_map{i+1}.png')
+            mask_img.save(mask_save_path)
 
     print(f'\nAll results are saved in {result_root}')

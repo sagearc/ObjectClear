@@ -1,0 +1,32 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "ObjectClear Example",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "inference_objectclear.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-i",
+                "/workspace/layered-segmentation/images/office.jpeg",
+                "-m",
+                "/workspace/layered-segmentation/sandbox/telescope_mask.png:/workspace/layered-segmentation/sandbox/book_mask.png",
+                "--guidance_scale",
+                "2.5",
+                "--use_fp16"
+            ],
+            "justMyCode": false
+        }
+    ]
+}

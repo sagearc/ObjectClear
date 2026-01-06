@@ -2370,12 +2370,7 @@ class ObjectClearPipeline(
         self._interrupt = False
 
         # 2. Define call parameters
-        if prompt is not None and isinstance(prompt, str):
-            batch_size = 1
-        elif prompt is not None and isinstance(prompt, list):
-            batch_size = len(prompt)
-        else:
-            batch_size = prompt_embeds.shape[0]
+        batch_size = len(mask_images)
 
         # device = self._execution_device
         device = self.unet.device
@@ -2405,6 +2400,12 @@ class ObjectClearPipeline(
             lora_scale=text_encoder_lora_scale,
             clip_skip=self.clip_skip,
         )
+
+        B = len(mask_images)
+        prompt_embeds = prompt_embeds.expand(B, -1, -1)
+        negative_prompt_embeds = negative_prompt_embeds.expand(B, -1, -1)
+        pooled_prompt_embeds = pooled_prompt_embeds.expand(B, -1)
+        negative_pooled_prompt_embeds = negative_pooled_prompt_embeds.expand(B, -1)
 
         # 4. set timesteps
         def denoising_value_valid(dnv):
@@ -2446,14 +2447,13 @@ class ObjectClearPipeline(
             image, height=height, width=width, crops_coords=crops_coords, resize_mode=resize_mode
         )
         init_image = init_image.to(dtype=torch.float32)
+        init_image = init_image.expand(B, -1, -1, -1)
 
         masks = self.mask_processor.preprocess(
             mask_images, height=height, width=width, resize_mode=resize_mode, crops_coords=crops_coords
         )
 
-        B = masks.shape[0]
-        init_image = init_image.expand(B, -1, -1, -1)
-
+        masked_images = init_image
         # masked_images = init_image * (mask < 0.5)
         obj_only = init_image * (masks > 0.5)
         obj_only = obj_only.to(device=device)
@@ -2491,9 +2491,9 @@ class ObjectClearPipeline(
             latents, noise = latents_outputs
 
         # 7. Prepare mask latent variables
-        mask, masked_image_latents = self.prepare_mask_latents(
-            mask,
-            masked_image,
+        masks, masked_image_latents = self.prepare_mask_latents(
+            masks,
+            masked_images,
             batch_size * num_images_per_prompt,
             height,
             width,
@@ -2506,7 +2506,7 @@ class ObjectClearPipeline(
         # 8. Check that sizes of mask, masked image and latents match
         if num_channels_unet == 9:
             # default case for runwayml/stable-diffusion-inpainting
-            num_channels_mask = mask.shape[1]
+            num_channels_mask = masks.shape[1]
             num_channels_masked_image = masked_image_latents.shape[1]
             if num_channels_latents + num_channels_mask + num_channels_masked_image != self.unet.config.in_channels:
                 raise ValueError(
@@ -2627,7 +2627,7 @@ class ObjectClearPipeline(
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 if num_channels_unet == 9:
-                    latent_model_input = torch.cat([latent_model_input, mask, masked_image_latents], dim=1)
+                    latent_model_input = torch.cat([latent_model_input, masks, masked_image_latents], dim=1)
 
                 # predict the noise residual
                 added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
@@ -2665,7 +2665,7 @@ class ObjectClearPipeline(
                 if self.config.apply_attention_guided_fusion:
                     if i == 0:
                         init_latents_proper = image_latents
-                        init_mask = mask[0:1]
+                        init_mask = masks[0:1]
 
                         noise_timestep = timesteps[i + 1]
                         init_latents_proper = self.scheduler.add_noise(
@@ -2676,7 +2676,7 @@ class ObjectClearPipeline(
                         
                     if i == len(timesteps) - 1 and self.config.apply_attention_guided_fusion:
                         attn_key, attn_map = next(iter(self.cross_attention_scores.items()))
-                        attn_map = self.resize_attn_map_divide2(attn_map, mask, fuse_index)
+                        attn_map = self.resize_attn_map_divide2(attn_map, masks, fuse_index)
                         init_latents_proper = image_latents
                         if self.do_classifier_free_guidance:
                             _, init_mask = attn_map.chunk(2)
