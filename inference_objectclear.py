@@ -35,30 +35,16 @@ if __name__ == '__main__':
     
     
     # ------------------------ input & output ------------------------
-    if args.input_path.endswith(('jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG')): # input single img path
-        input_img_list = [args.input_path]
-        result_root = f'results/test_single_img'
-    else: # input img folder
-        # scan all the jpg and png images
-        input_img_list = sorted(glob.glob(os.path.join(args.input_path, '*.[jpJP][pnPN]*[gG]')))
-        result_root = f'results/{os.path.basename(args.input_path)}'
-        
-    if args.mask_path.endswith(('jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'PNG')): # input single mask path
-        input_mask_list = [args.mask_path]
-    else: # input mask folder
-        # scan all the jpg and png masks
-        input_mask_list = sorted(glob.glob(os.path.join(args.mask_path, '*.[jpJP][pnPN]*[gG]')))
-        
-    if len(input_img_list) != len(input_mask_list):
-        raise ValueError(f"Mismatch between input images ({len(input_img_list)}) and masks ({len(input_mask_list)}).")
+    image_path = os.path.basename(args.input_path)
+    mask_paths = sorted(glob.glob(args.mask_path))
 
-    if not args.output_path is None: # set output path
-        result_root = args.output_path
-        
-    os.makedirs(result_root, exist_ok=True)
+    image_name = os.path.basename(args.input_path)
 
-    test_img_num = len(input_img_list)
-    
+    output_dir =  args.output_path
+    if output_dir is None:
+        output_dir = f'results/{image_name}'
+        
+    os.makedirs(output_dir, exist_ok=True)    
     
     # ------------------ set up ObjectClear pipeline -------------------
     torch_dtype = torch.float16 if args.use_fp16 else torch.float32
@@ -76,44 +62,43 @@ if __name__ == '__main__':
     
     
     # -------------------- start to processing ---------------------
-    for i, (img_path, mask_path) in enumerate(zip(input_img_list, input_mask_list)):
-        img_name = os.path.basename(img_path)
-        basename, ext = os.path.splitext(img_name)
-        print(f'[{i+1}/{test_img_num}] Processing: {img_name}')
-        
-        image = Image.open(img_path).convert("RGB")
-        mask1 = Image.open(mask_path.split(":")[0]).convert("L")
-        mask2 = Image.open(mask_path.split(":")[1]).convert("L")
-        image_or = image.copy()
-        
-        # Our model was trained on 512×512 resolution.
-        # Resizing the input so that the **shorter side is 512** helps achieve the best performance.
-        image = resize_by_short_side(image, 512, resample=Image.BICUBIC)
-        mask1 = resize_by_short_side(mask1, 512, resample=Image.NEAREST)
-        mask2 = resize_by_short_side(mask2, 512, resample=Image.NEAREST)
-        
-        w, h = image.size
+    img_name = os.path.basename(img_path)
+    basename, ext = os.path.splitext(img_name)
+    print(f'Processing: {img_name}')
     
-        result = pipe.batch_inference(
-            prompt="remove the instance of object",
-            image=image,
-            mask_images=[mask1, mask2],
-            generator=generator,
-            num_inference_steps=args.steps,
-            guidance_scale=args.guidance_scale,
-            height=h,
-            width=w,
-            return_attn_map=True,
-        )
-        
-        for i, (fused_img_pil, mask_img) in enumerate(zip(result.images, result.attns)):
-            # save results
-            save_path = os.path.join(result_root, f'{basename}_removed_obj{i+1}.png')
-            fused_img_pil = fused_img_pil.resize(image_or.size)
-            fused_img_pil.save(save_path)
+    image = Image.open(img_path).convert("RGB")
+    mask1 = Image.open(mask_path.split(":")[0]).convert("L")
+    mask2 = Image.open(mask_path.split(":")[1]).convert("L")
+    image_or = image.copy()
+    
+    # Our model was trained on 512×512 resolution.
+    # Resizing the input so that the **shorter side is 512** helps achieve the best performance.
+    image = resize_by_short_side(image, 512, resample=Image.BICUBIC)
+    mask1 = resize_by_short_side(mask1, 512, resample=Image.NEAREST)
+    mask2 = resize_by_short_side(mask2, 512, resample=Image.NEAREST)
+    
+    w, h = image.size
 
-            mask_img = mask_img.resize(image_or.size)
-            mask_save_path = os.path.join(result_root, f'{basename}_attn_map{i+1}.png')
-            mask_img.save(mask_save_path)
+    result = pipe.batch_inference(
+        prompt="remove the instance of object",
+        image=image,
+        mask_images=[mask1, mask2],
+        generator=generator,
+        num_inference_steps=args.steps,
+        guidance_scale=args.guidance_scale,
+        height=h,
+        width=w,
+        return_attn_map=True,
+    )
+    
+    for i, (fused_img_pil, mask_img) in enumerate(zip(result.images, result.attns)):
+        # save results
+        save_path = os.path.join(output_dir, f'{basename}_removed_obj{i+1}.png')
+        fused_img_pil = fused_img_pil.resize(image_or.size)
+        fused_img_pil.save(save_path)
 
-    print(f'\nAll results are saved in {result_root}')
+        mask_img = mask_img.resize(image_or.size)
+        mask_save_path = os.path.join(output_dir, f'{basename}_attn_map{i+1}.png')
+        mask_img.save(mask_save_path)
+
+    print(f'\nAll results are saved in {output_dir}')
