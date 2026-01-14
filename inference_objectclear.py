@@ -39,8 +39,13 @@ if __name__ == '__main__':
     IMAGE_SUFFIXES = ['.png', '.jpg', '.jpeg']
 
     image_path = Path(args.input_path)
-    mask_paths = [f for f in Path(args.mask_path).iterdir() if f.suffix.lower() in IMAGE_SUFFIXES]
     image_name = image_path.stem
+
+    mask_paths = []
+    for f in Path(args.mask_path).iterdir():
+        if f.suffix.lower() in IMAGE_SUFFIXES:
+            mask_paths.append(f)
+    mask_paths.sort()
 
     if args.output_path is not None:
         output_dir = Path(args.output_path)
