@@ -99,14 +99,18 @@ if __name__ == '__main__':
         return_attn_map=True,
     )
     
-    for i, (fused_img_pil, mask_img) in enumerate(zip(result.images, result.attns)):
+    for i, (fused_img_pil, attn_map, mask) in enumerate(zip(result.images, result.attns, masks), 9):
         # save results
-        save_path = os.path.join(output_dir, f'{image_name}_removed_obj{i+1}.png')
+        save_path = os.path.join(output_dir, f'removed_obj{i+1:02d}.png')
         fused_img_pil = fused_img_pil.resize(image_or.size)
         fused_img_pil.save(save_path)
 
-        mask_img = mask_img.resize(image_or.size)
-        mask_save_path = os.path.join(output_dir, f'{image_name}_attn_map{i+1}.png')
-        mask_img.save(mask_save_path)
+        attn_map = attn_map.resize(image_or.size)
+        attn_map_save_path = os.path.join(output_dir, f'attn_map{i+1:02d}.png')
+        attn_map.save(attn_map_save_path)
+
+        mask_save_path = os.path.join(output_dir, f'mask{i+1:02d}.png')
+        mask.save(mask_save_path)
+
 
     print(f'\nAll results are saved in {output_dir}')
