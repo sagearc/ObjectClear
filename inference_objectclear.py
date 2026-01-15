@@ -32,6 +32,8 @@ if __name__ == '__main__':
                         help='CFG guidance scale. Default: 2.5')
     parser.add_argument('--no_agf', action='store_true', 
                         help='Disable Attention Guided Fusion')
+    parser.add_argument('--batch_size', type=int, default=10,
+                        help='Batch size for inference. Default: 10')
     args = parser.parse_args()
     
     
@@ -87,19 +89,31 @@ if __name__ == '__main__':
 
     w, h = image.size
 
-    result = pipe.batch_inference(
-        prompt="remove the instance of object",
-        image=image,
-        mask_images=masks,
-        generator=generator,
-        num_inference_steps=args.steps,
-        guidance_scale=args.guidance_scale,
-        height=h,
-        width=w,
-        return_attn_map=True,
-    )
+    images, attn_masks = [], []
+    for i in range(0, len(masks), args.batch_size):
+        print(f'Processing masks {i+1} to {min(i+args.batch_size, len(masks))} / {len(masks)}')
+        batch_masks = masks[i:i+args.batch_size]
+        result = pipe.batch_inference(
+            prompt="remove the instance of object",
+            image=image,
+            mask_images=masks,
+            generator=generator,
+            num_inference_steps=args.steps,
+            guidance_scale=args.guidance_scale,
+            height=h,
+            width=w,
+            return_attn_map=True,
+        )
+        images.extend(result.images)
+        attn_masks.extend(result.attns)
+
+    # -------------------- save results ---------------------
+    metadata = {
+        "image_path": str(image_path),
+        "results": []
+    }
     
-    for i, (fused_img_pil, attn_map, mask) in enumerate(zip(result.images, result.attns, masks), 9):
+    for i, (fused_img_pil, attn_map) in enumerate(zip(images, attn_masks)):
         # save results
         save_path = os.path.join(output_dir, f'removed_obj{i+1:02d}.png')
         fused_img_pil = fused_img_pil.resize(image_or.size)
